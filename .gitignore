@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+debug_out.txt
+
+# Frontend (has its own repo)
+frontend/
+
+# Misc
+code.py
+test_api_key.txt
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
