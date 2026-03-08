@@ -10,29 +10,18 @@ TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
 TWILIO_WEBHOOK_BASE_URL = os.environ.get("TWILIO_WEBHOOK_BASE_URL", "https://api.clawcall.com")
 
-# ── Solana (kept for future use) ──────────────────────────────────────────
+# ── Solana payments ───────────────────────────────────────────────────────
 SOLANA_RPC_URL  = os.environ.get("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
-CLAWCALL_WALLET = os.environ.get("CLAWCALL_WALLET", "")   # Solana wallet (future)
+CLAWCALL_WALLET = os.environ.get("CLAWCALL_WALLET", "")   # Solana wallet that receives USDC
 HELIUS_API_KEY  = os.environ.get("HELIUS_API_KEY", "")
-USDC_MINT       = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 
-# ── Base chain (primary payments) ─────────────────────────────────────────
-BASE_RPC_URL         = os.environ.get("BASE_RPC_URL", "https://mainnet.base.org")
-CLAWCALL_EVM_WALLET  = os.environ.get("CLAWCALL_EVM_WALLET", "")  # EVM wallet receives payments
+# USDC on Solana mainnet (6 decimals)
+USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 
-# Token contracts on Base mainnet (both 6 decimals)
-BASE_USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
-BASE_USDT_ADDRESS = "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2"
-
-SUPPORTED_TOKENS = {
-    "usdc": BASE_USDC_ADDRESS,
-    "usdt": BASE_USDT_ADDRESS,
-}
-
-# Pricing in stablecoin units (6 decimals — same for USDC & USDT on Base)
+# Pricing in USDC raw units (6 decimals)
 TIER_PRICE_BASE = {
-    "pro":  9_000_000,   # 9 USDC/USDT
-    "team": 29_000_000,  # 29 USDC/USDT
+    "pro":  9_000_000,   # $9 USDC
+    "team": 29_000_000,  # $29 USDC
 }
 
 SUBSCRIPTION_DAYS = 30

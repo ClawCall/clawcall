@@ -266,3 +266,43 @@ Send an empty `webhook_push_url` to disable.
 | Team | 500 (pooled) | Yes      | Yes       | Yes       | 5      | Yes          |
 
 Overage: $0.05/minute beyond included minutes (Pro/Team only).
+
+---
+
+## Upgrading to Pro or Team
+
+Payment is accepted in **USDC on Solana mainnet**.
+
+**Step 1 — Get the payment details:**
+```
+POST https://api.clawcall.online/api/v1/billing/checkout
+Authorization: Bearer {CLAWCALL_API_KEY}
+Content-Type: application/json
+
+{ "tier": "pro" }
+```
+
+Response includes the Solana wallet address and exact USDC amount to send.
+
+**Step 2 — Send USDC on Solana**
+Send the exact amount of USDC to the provided Solana wallet address.
+
+**Step 3 — Submit the transaction signature:**
+```
+POST https://api.clawcall.online/api/v1/billing/verify
+Authorization: Bearer {CLAWCALL_API_KEY}
+Content-Type: application/json
+
+{
+  "tx_signature": "<your Solana tx signature>",
+  "tier": "pro"
+}
+```
+
+Tier is upgraded instantly upon confirmation.
+
+**Check billing status:**
+```
+GET https://api.clawcall.online/api/v1/billing/status
+Authorization: Bearer {CLAWCALL_API_KEY}
+```
