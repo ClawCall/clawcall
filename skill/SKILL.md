@@ -32,7 +32,7 @@ If `CLAWCALL_API_KEY` is not set, run registration:
 3. Call:
 
 ```
-POST https://api.clawcall.com/api/v1/register
+POST https://api.clawcall.online/api/v1/register
 Content-Type: application/json
 
 {
@@ -93,7 +93,7 @@ respond quickly with an intermediate message like:
 When you finish a background task the user asked you to report on:
 
 ```
-POST https://api.clawcall.com/api/v1/calls/outbound/callback
+POST https://api.clawcall.online/api/v1/calls/outbound/callback
 Authorization: Bearer {CLAWCALL_API_KEY}
 Content-Type: application/json
 
@@ -115,7 +115,7 @@ hearing the message (it becomes a live call session).
 When the user asks to be called on a schedule:
 
 ```
-POST https://api.clawcall.com/api/v1/calls/schedule
+POST https://api.clawcall.online/api/v1/calls/schedule
 Authorization: Bearer {CLAWCALL_API_KEY}
 Content-Type: application/json
 
@@ -134,7 +134,7 @@ Common cron patterns:
 
 To cancel a schedule:
 ```
-DELETE https://api.clawcall.com/api/v1/calls/schedule/{id}
+DELETE https://api.clawcall.online/api/v1/calls/schedule/{id}
 Authorization: Bearer {CLAWCALL_API_KEY}
 ```
 
@@ -147,7 +147,7 @@ Authorization: Bearer {CLAWCALL_API_KEY}
 When the user asks you to call someone else autonomously:
 
 ```
-POST https://api.clawcall.com/api/v1/calls/outbound/third-party
+POST https://api.clawcall.online/api/v1/calls/outbound/third-party
 Authorization: Bearer {CLAWCALL_API_KEY}
 Content-Type: application/json
 
@@ -174,7 +174,7 @@ Set `end_call: true` when the objective is complete.
 ## Checking Usage
 
 ```
-GET https://api.clawcall.com/api/v1/account
+GET https://api.clawcall.online/api/v1/account
 Authorization: Bearer {CLAWCALL_API_KEY}
 ```
 
@@ -187,7 +187,7 @@ Returns tier, minutes used, minutes remaining, and phone number.
 Set the TTS voice used on calls (Polly neural voices):
 
 ```
-POST https://api.clawcall.com/api/v1/account/voice
+POST https://api.clawcall.online/api/v1/account/voice
 Authorization: Bearer {CLAWCALL_API_KEY}
 Content-Type: application/json
 
@@ -204,13 +204,13 @@ Team tier supports up to 5 agents, each with its own dedicated number and API ke
 
 **List all agents:**
 ```
-GET https://api.clawcall.com/api/v1/agents
+GET https://api.clawcall.online/api/v1/agents
 Authorization: Bearer {CLAWCALL_API_KEY}
 ```
 
 **Add an agent:**
 ```
-POST https://api.clawcall.com/api/v1/agents
+POST https://api.clawcall.online/api/v1/agents
 Authorization: Bearer {CLAWCALL_API_KEY}
 Content-Type: application/json
 
@@ -223,7 +223,7 @@ Returns a new `api_key` and `phone_number` for the new agent.
 
 **Remove an agent:**
 ```
-DELETE https://api.clawcall.com/api/v1/agents/{agent_id}
+DELETE https://api.clawcall.online/api/v1/agents/{agent_id}
 Authorization: Bearer {CLAWCALL_API_KEY}
 ```
 Cannot remove the primary (first-registered) agent.
@@ -235,7 +235,7 @@ Cannot remove the primary (first-registered) agent.
 Receive real-time call events posted to your own URL:
 
 ```
-POST https://api.clawcall.com/api/v1/account/webhook
+POST https://api.clawcall.online/api/v1/account/webhook
 Authorization: Bearer {CLAWCALL_API_KEY}
 Content-Type: application/json
 
