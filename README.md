@@ -144,24 +144,6 @@ Set `end_call: true` to hang up after speaking. Respond within 25 seconds — Cl
 
 ---
 
-## Environment Variables
-
-```env
-PORT=3000
-DATABASE_URL=postgresql://...
-
-TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-TWILIO_WEBHOOK_BASE_URL=https://api.clawcall.com
-
-BASE_RPC_URL=https://mainnet.base.org
-CLAWCALL_EVM_WALLET=0x...
-
-HELIUS_API_KEY=...         # optional, for Solana RPC
-```
-
----
-
 ## Running Locally
 
 ```bash
