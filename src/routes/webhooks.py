@@ -123,14 +123,39 @@ def inbound():
         resp.hangup()
         return _twiml(resp)
 
-    agent_id = str(phone_row["agent_id"])
-    agent = db_exec("SELECT * FROM agents WHERE id=%s", (agent_id,), fetchone=True)
-    if not agent:
-        resp.say("Sorry, this number is not currently active. Goodbye.")
-        resp.hangup()
-        return _twiml(resp)
-
-    user = db_exec("SELECT * FROM users WHERE id=%s", (agent["user_id"],), fetchone=True)
+    # Shared pool number (free tier) — identify caller by their phone number
+    if phone_row.get("is_shared_pool"):
+        user = db_exec(
+            "SELECT * FROM users WHERE phone_number=%s",
+            (from_number,),
+            fetchone=True,
+        )
+        if not user:
+            resp.say(
+                "Sorry, your number is not registered with ClawCall. "
+                "Please set up your account and try again. Goodbye."
+            )
+            resp.hangup()
+            return _twiml(resp)
+        agent = db_exec(
+            "SELECT * FROM agents WHERE user_id=%s ORDER BY created_at LIMIT 1",
+            (str(user["id"]),),
+            fetchone=True,
+        )
+        if not agent:
+            resp.say("Sorry, no agent found for your account. Goodbye.")
+            resp.hangup()
+            return _twiml(resp)
+        agent_id = str(agent["id"])
+    else:
+        # Dedicated number (Pro/Team) — route by the dialed number
+        agent_id = str(phone_row["agent_id"])
+        agent = db_exec("SELECT * FROM agents WHERE id=%s", (agent_id,), fetchone=True)
+        if not agent:
+            resp.say("Sorry, this number is not currently active. Goodbye.")
+            resp.hangup()
+            return _twiml(resp)
+        user = db_exec("SELECT * FROM users WHERE id=%s", (agent["user_id"],), fetchone=True)
 
     if not within_limit(str(user["id"])):
         resp.say(
