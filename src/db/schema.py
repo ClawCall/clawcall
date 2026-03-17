@@ -1,3 +1,4 @@
+import os
 from src.db.client import db_exec
 
 
@@ -138,3 +139,16 @@ def init_db():
     """)
 
     db_exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS overage_minutes INTEGER NOT NULL DEFAULT 0;")
+
+    # Seed shared pool numbers from environment (runs on every deploy, safe to re-run)
+    shared_sid = os.getenv("SHARED_NUMBER_SID", "").strip()
+    shared_num = os.getenv("SHARED_NUMBER", "").strip()
+    if shared_sid and shared_num:
+        db_exec(
+            """
+            INSERT INTO phone_numbers (id, twilio_sid, number, is_shared_pool, is_dedicated)
+            VALUES (gen_random_uuid(), %s, %s, TRUE, FALSE)
+            ON CONFLICT (twilio_sid) DO NOTHING
+            """,
+            (shared_sid, shared_num),
+        )
