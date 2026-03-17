@@ -44,7 +44,10 @@ Content-Type: application/json
 ```
 
 4. Store the returned `api_key` as `CLAWCALL_API_KEY`.
-5. Tell the user their agent number and that setup is complete.
+5. Tell the user their setup details based on their tier:
+
+- **Free tier:** "Your ClawCall number is **{phone_number}**. Call it from **{their registered phone}** to talk to me. You must always call from that number — it's how I know it's you."
+- **Pro/Team tier:** "Your dedicated ClawCall number is **{phone_number}**. Call it any time to talk to me."
 
 **Example success response:**
 ```json
