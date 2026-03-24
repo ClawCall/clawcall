@@ -162,6 +162,10 @@ def inbound():
             resp.hangup()
             return _twiml(resp)
         user = db_exec("SELECT * FROM users WHERE id=%s", (agent["user_id"],), fetchone=True)
+        if not user:
+            resp.say("Sorry, this number is not currently active. Goodbye.")
+            resp.hangup()
+            return _twiml(resp)
 
     if not within_limit(str(user["id"])):
         resp.say(

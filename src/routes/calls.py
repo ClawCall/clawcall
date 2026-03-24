@@ -140,6 +140,8 @@ def create_schedule():
         return jsonify({"ok": False, "error": "cron is required"}), 400
 
     user = db_exec("SELECT * FROM users WHERE id=%s", (agent["user_id"],), fetchone=True)
+    if not user:
+        return jsonify({"ok": False, "error": "User not found"}), 404
     if user["tier"] == "free":
         return jsonify({"ok": False, "error": "Scheduled calls require Pro tier or above"}), 403
 
@@ -253,6 +255,8 @@ def third_party_call():
         return jsonify({"ok": False, "error": "objective is required"}), 400
 
     user = db_exec("SELECT * FROM users WHERE id=%s", (agent["user_id"],), fetchone=True)
+    if not user:
+        return jsonify({"ok": False, "error": "User not found"}), 404
     if user["tier"] not in ("pro", "team"):
         return jsonify({"ok": False, "error": "Third party calls require Pro tier or above"}), 403
 

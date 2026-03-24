@@ -8,7 +8,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
-TWILIO_WEBHOOK_BASE_URL = os.environ.get("TWILIO_WEBHOOK_BASE_URL", "https://api.clawcall.com")
+TWILIO_WEBHOOK_BASE_URL = os.environ.get("TWILIO_WEBHOOK_BASE_URL", "https://api.clawcall.online")
 
 # ── Solana payments ───────────────────────────────────────────────────────
 SOLANA_RPC_URL  = os.environ.get("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")

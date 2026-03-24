@@ -18,13 +18,19 @@ def db_conn():
 
 
 def db_exec(query, params=None, fetchone=False, fetchall=False):
+    global _DB_CONN
     with _DB_LOCK:
-        conn = db_conn()
-        conn.autocommit = True
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(query, params or ())
-            if fetchone:
-                return cur.fetchone()
-            if fetchall:
-                return cur.fetchall()
-            return None
+        try:
+            conn = db_conn()
+            conn.autocommit = True
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(query, params or ())
+                if fetchone:
+                    return cur.fetchone()
+                if fetchall:
+                    return cur.fetchall()
+                return None
+        except psycopg2.OperationalError:
+            # Connection is broken — reset so db_conn() reconnects on next call
+            _DB_CONN = None
+            raise

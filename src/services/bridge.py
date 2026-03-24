@@ -164,7 +164,8 @@ def submit_response(call_sid: str, response: str, end_call: bool) -> bool:
             "end_call": bool(end_call),
             "ts": time.time(),
         })
-    job["event"].set()
+        event = job["event"]  # capture ref while holding lock
+    event.set()
     logger.info(f"Agent submitted response for {call_sid}, end_call={end_call}")
     return True
 
