@@ -16,6 +16,12 @@ def get_account():
         (str(agent["id"]),),
         fetchone=True,
     )
+    # Free tier: no dedicated number — return the shared pool number
+    if not phone:
+        phone = db_exec(
+            "SELECT number, is_dedicated FROM phone_numbers WHERE is_shared_pool=TRUE LIMIT 1",
+            fetchone=True,
+        )
 
     minutes_remaining = max(0, user["minutes_limit"] - user["minutes_used_this_month"])
 
