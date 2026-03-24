@@ -229,7 +229,7 @@ def gather():
         return _twiml(resp)
 
     append_transcript(call_sid, "user", speech)
-    bridge.ask_agent(agent["webhook_url"], call_sid, speech)
+    bridge.queue_message(agent_id, call_sid, speech)
 
     result, end_call, got_result = bridge.poll_result(call_sid)
 
@@ -481,7 +481,7 @@ def scheduled_twiml():
         fetchone=True,
     )["id"]
 
-    bridge.ask_agent(agent["webhook_url"], call_sid, f"[SCHEDULED] {task_context}")
+    bridge.queue_message(agent_id, call_sid, f"[SCHEDULED] {task_context}")
     result, end_call, got_result = bridge.poll_result(call_sid)
 
     if not got_result:
@@ -536,7 +536,7 @@ def third_party_twiml():
     )
 
     opening = f"[THIRD PARTY CALL]\nObjective: {job['objective']}\nContext: {job.get('context', '')}"
-    bridge.ask_agent(agent["webhook_url"], call_sid, opening)
+    bridge.queue_message(str(job["agent_id"]), call_sid, opening)
     result, end_call, got_result = bridge.poll_result(call_sid)
 
     if not got_result:
@@ -633,7 +633,7 @@ def third_party_gather():
     voice = agent.get("voice") or DEFAULT_VOICE
     append_transcript(call_sid, "third_party", speech)
 
-    bridge.ask_agent(agent["webhook_url"], call_sid, f"[THIRD PARTY SAYS]: {speech}")
+    bridge.queue_message(str(agent["id"]), call_sid, f"[THIRD PARTY SAYS]: {speech}")
     result, end_call, _ = bridge.poll_result(call_sid)
     append_transcript(call_sid, "agent", result)
 
@@ -672,19 +672,16 @@ def _complete_third_party(job_id: str, call_sid: str, agent: dict | None):
         (transcript_str, job_id),
     )
 
+    # Notify agent via listen queue so no public webhook URL is needed
     if agent:
-        def _notify():
-            try:
-                import requests as req
-                req.post(
-                    f"{agent['webhook_url'].rstrip('/')}/clawcall/third-party-complete",
-                    json={
-                        "job_id": job_id,
-                        "status": "completed",
-                        "transcript": turns,
-                    },
-                    timeout=5,
-                )
-            except Exception:
-                pass
-        threading.Thread(target=_notify, daemon=True).start()
+        import json as _json
+        notification = _json.dumps({
+            "job_id": job_id,
+            "status": "completed",
+            "transcript": turns,
+        })
+        bridge.queue_message(
+            str(agent["id"]),
+            f"notify-{job_id}",
+            f"[THIRD PARTY COMPLETE]\n{notification}",
+        )

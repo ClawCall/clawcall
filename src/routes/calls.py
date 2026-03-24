@@ -6,10 +6,62 @@ from src.middleware.auth import require_api_key
 from src.services.twilio_svc import place_outbound_call
 from src.services.scheduler import add_scheduled_call, remove_scheduled_call
 from src.services.minutes import within_limit
+from src.services import bridge
 from src.config import TWILIO_WEBHOOK_BASE_URL
 
 logger = logging.getLogger(__name__)
 calls_bp = Blueprint("calls", __name__)
+
+
+# ---------------------------------------------------------------------------
+# Long-poll listen + respond (no public URL required on agent side)
+# ---------------------------------------------------------------------------
+
+@calls_bp.route("/api/v1/calls/listen", methods=["GET"])
+@require_api_key
+def listen():
+    """
+    Long-poll endpoint. Agent calls this to receive incoming call messages.
+    Blocks until a message arrives or timeout (max 25s).
+
+    Returns:
+      { ok: true, call_sid, message }          — a call message is waiting
+      { ok: true, timeout: true }              — no message within timeout
+    """
+    agent = g.agent
+    timeout = min(float(request.args.get("timeout", 25)), 25)
+
+    msg = bridge.get_pending_message(str(agent["id"]), timeout=timeout)
+
+    if msg is None:
+        return jsonify({"ok": True, "timeout": True})
+
+    return jsonify({
+        "ok": True,
+        "call_sid": msg["call_sid"],
+        "message": msg["message"],
+    })
+
+
+@calls_bp.route("/api/v1/calls/respond/<call_sid>", methods=["POST"])
+@require_api_key
+def respond(call_sid):
+    """
+    Agent submits its response to a queued call message.
+    Body: { response: "...", end_call: false }
+    """
+    body = request.get_json(silent=True) or {}
+    response_text = (body.get("response") or "").strip()
+    end_call = bool(body.get("end_call", False))
+
+    if not response_text:
+        return jsonify({"ok": False, "error": "response is required"}), 400
+
+    ok = bridge.submit_response(call_sid, response_text, end_call)
+    if not ok:
+        return jsonify({"ok": False, "error": "Unknown or expired call_sid"}), 404
+
+    return jsonify({"ok": True})
 
 
 # ---------------------------------------------------------------------------

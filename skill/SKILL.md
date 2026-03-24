@@ -1,11 +1,10 @@
 ---
 name: clawcall
-version: 1.0.0
+version: 2.0.0
 description: >
   Give this agent a real phone number. Receive calls from the user,
   call user back when tasks complete, run scheduled calls, or call
-  third parties on the user's behalf. All phone infrastructure is
-  handled automatically via the ClawCall service.
+  third parties on the user's behalf. No public URL or Tailscale required.
 metadata:
   openclaw:
     requires:
@@ -17,81 +16,97 @@ metadata:
 
 # ClawCall — Phone Calls for Your Agent
 
-ClawCall gives you a real phone number connected directly to this agent.
-Users can call you, you can call them back when tasks finish, run scheduled
-briefings, and place calls to third parties on the user's behalf.
+ClawCall gives your agent a real phone number. Users can call you, you can
+call them back, schedule briefings, and place calls to third parties.
+
+**No webhook URL or Tailscale required.** Your agent pulls messages from
+ClawCall using long-polling — all outbound connections from your machine.
 
 ---
 
-## Setup (First Time Only)
+## Setup (Runs Automatically — No Manual Steps Needed)
 
-If `CLAWCALL_API_KEY` is not set, run registration:
+**On every startup**, check if `CLAWCALL_API_KEY` is set.
 
-1. Ask the user: "What email should I use for your ClawCall account?"
-2. Ask the user: "What's your personal phone number? (I'll call you on this)"
-3. Call:
+If `CLAWCALL_API_KEY` is NOT set:
+
+1. Ask the user ONE question:
+   > "What's your phone number? I'll use it to set up your ClawCall account
+   > so you can call me directly. (e.g. +14155550100)"
+
+2. Register immediately — no email or webhook URL needed:
 
 ```
 POST https://api.clawcall.online/api/v1/register
 Content-Type: application/json
 
 {
-  "email": "<user email>",
-  "agent_webhook_url": "<your public URL>",
-  "agent_name": "<optional name>",
-  "phone_number": "<user's E.164 phone, e.g. +14155550100>"
+  "phone_number": "<user's E.164 phone>",
+  "agent_name":   "<your agent name>"
 }
 ```
 
-4. Store the returned `api_key` as `CLAWCALL_API_KEY`.
-5. Tell the user their setup details based on their tier:
+3. Save the returned `api_key` as `CLAWCALL_API_KEY`.
+   Also save the returned `email` as `CLAWCALL_EMAIL` (for re-registration later).
 
-- **Free tier:** "Your ClawCall number is **{phone_number}**. Call it from **{their registered phone}** to talk to me. You must always call from that number — it's how I know it's you."
-- **Pro/Team tier:** "Your dedicated ClawCall number is **{phone_number}**. Call it any time to talk to me."
+4. Tell the user:
+   > "You're all set! 📞 Your ClawCall number is **{phone_number}**.
+   > Call it from **{their phone}** anytime to talk to me directly.
+   > *(Free tier: you must call from your registered number so I know it's you.)*"
 
-**Example success response:**
-```json
-{
-  "ok": true,
-  "api_key": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-  "phone_number": "+14155550192",
-  "tier": "free",
-  "message": "Setup complete! Your agent number is +14155550192."
-}
-```
+5. Immediately start the listen loop (see below).
 
 ---
 
-## Receiving an Inbound Call
+## The Listen Loop (Always Running)
 
-ClawCall will forward the caller's speech to your webhook as:
+After setup, run this loop continuously so you never miss a call:
 
 ```
-POST {your_webhook_url}/clawcall/message
-{
-  "call_sid": "CAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-  "message": "What's the weather like today?"
-}
+loop forever:
+    GET https://api.clawcall.online/api/v1/calls/listen?timeout=25
+    Authorization: Bearer {CLAWCALL_API_KEY}
+
+    if response.timeout == true:
+        continue  # no call, loop again immediately
+
+    call_sid = response.call_sid
+    message  = response.message
+
+    reply = process(message)   # your normal agent logic
+
+    POST https://api.clawcall.online/api/v1/calls/respond/{call_sid}
+    Authorization: Bearer {CLAWCALL_API_KEY}
+    Content-Type: application/json
+
+    { "response": reply, "end_call": false }
+
+    # keep looping — next call will come through the same endpoint
 ```
 
-Your webhook must respond with:
+Set `"end_call": true` in your response to hang up after speaking.
 
-```json
-{
-  "response": "It's currently 72°F and sunny.",
-  "end_call": false
-}
-```
-
-Set `"end_call": true` to hang up after speaking your response.
-
-**Important:** Respond within 25 seconds. For tasks taking longer,
-respond quickly with an intermediate message like:
-`"On it, give me a second."` — ClawCall will keep the line active.
+**Important:** Respond within 25 seconds. For tasks taking longer, respond
+quickly with `"On it, give me a second."` — ClawCall will keep the line
+active while you work.
 
 ---
 
-## Calling the User Back (Task Completion)
+## Message Types
+
+Messages arriving via `/calls/listen` follow these patterns:
+
+| Message prefix | Meaning |
+|---|---|
+| *(plain text)* | User is speaking on an inbound call |
+| `[SCHEDULED] <context>` | A scheduled call fired — deliver the briefing |
+| `[THIRD PARTY CALL]` | Start of an autonomous third-party call |
+| `[THIRD PARTY SAYS]: <speech>` | Third party spoke — continue the conversation |
+| `[THIRD PARTY COMPLETE]` | Third-party call ended — JSON transcript follows |
+
+---
+
+## Calling the User Back (Pro tier)
 
 When you finish a background task the user asked you to report on:
 
@@ -107,15 +122,11 @@ Content-Type: application/json
 ```
 
 If `allow_followup` is true, the user can ask follow-up questions after
-hearing the message (it becomes a live call session).
-
-**Requires Pro tier.**
+hearing the message. The follow-up arrives via your listen loop as normal.
 
 ---
 
-## Scheduling a Recurring Call
-
-When the user asks to be called on a schedule:
+## Scheduling a Recurring Call (Pro tier)
 
 ```
 POST https://api.clawcall.online/api/v1/calls/schedule
@@ -125,7 +136,7 @@ Content-Type: application/json
 {
   "cron": "0 8 * * 1-5",
   "label": "Morning briefing",
-  "task_context": "Give me a summary of my calendar, top emails, and pending tasks",
+  "task_context": "Give me a summary of my calendar, top emails, and tasks",
   "timezone": "America/New_York"
 }
 ```
@@ -135,19 +146,11 @@ Common cron patterns:
 - Every day 9am:     `"0 9 * * *"`
 - Every Monday 7am:  `"0 7 * * 1"`
 
-To cancel a schedule:
-```
-DELETE https://api.clawcall.online/api/v1/calls/schedule/{id}
-Authorization: Bearer {CLAWCALL_API_KEY}
-```
-
-**Requires Pro tier.**
+To cancel: `DELETE /api/v1/calls/schedule/{id}`
 
 ---
 
 ## Calling a Third Party (Pro tier)
-
-When the user asks you to call someone else autonomously:
 
 ```
 POST https://api.clawcall.online/api/v1/calls/outbound/third-party
@@ -157,20 +160,15 @@ Content-Type: application/json
 {
   "to_number": "+14155550100",
   "objective": "Book a dentist appointment for next Tuesday afternoon",
-  "context": "Patient: Aayush Kumar. Returning patient. Flexible on time."
+  "context":   "Patient: Alex Kumar. Returning patient. Flexible on time."
 }
 ```
 
-ClawCall will:
-1. Dial the number
-2. Forward the conversation to your `/clawcall/message` webhook
-3. POST to `/clawcall/third-party-complete` when the call ends
-
-Your webhook receives the same format — detect `[THIRD PARTY CALL]` or
-`[THIRD PARTY SAYS]` prefixes to know you're speaking to a third party.
-Set `end_call: true` when the objective is complete.
-
-**Requires Pro tier.**
+The conversation arrives turn-by-turn via your listen loop:
+- Opening turn: `[THIRD PARTY CALL]\nObjective: ...\nContext: ...`
+- Each reply: `[THIRD PARTY SAYS]: <speech>`
+- When done, set `end_call: true` in your response.
+- Completion notification: `[THIRD PARTY COMPLETE]\n{json}`
 
 ---
 
@@ -181,13 +179,9 @@ GET https://api.clawcall.online/api/v1/account
 Authorization: Bearer {CLAWCALL_API_KEY}
 ```
 
-Returns tier, minutes used, minutes remaining, and phone number.
-
 ---
 
 ## Changing Voice
-
-Set the TTS voice used on calls (Polly neural voices):
 
 ```
 POST https://api.clawcall.online/api/v1/account/voice
@@ -197,86 +191,15 @@ Content-Type: application/json
 { "voice": "aria" }
 ```
 
-Available voices: `aria` (default), `joanna`, `matthew`, `amy`, `brian`, `emma`, `olivia`.
-
----
-
-## Multi-Agent Management (Team tier)
-
-Team tier supports up to 5 agents, each with its own dedicated number and API key.
-
-**List all agents:**
-```
-GET https://api.clawcall.online/api/v1/agents
-Authorization: Bearer {CLAWCALL_API_KEY}
-```
-
-**Add an agent:**
-```
-POST https://api.clawcall.online/api/v1/agents
-Authorization: Bearer {CLAWCALL_API_KEY}
-Content-Type: application/json
-
-{
-  "agent_webhook_url": "https://agent2.tail1234.ts.net",
-  "agent_name": "Work Agent"
-}
-```
-Returns a new `api_key` and `phone_number` for the new agent.
-
-**Remove an agent:**
-```
-DELETE https://api.clawcall.online/api/v1/agents/{agent_id}
-Authorization: Bearer {CLAWCALL_API_KEY}
-```
-Cannot remove the primary (first-registered) agent.
-
----
-
-## Webhook Push for Call Events (Team tier)
-
-Receive real-time call events posted to your own URL:
-
-```
-POST https://api.clawcall.online/api/v1/account/webhook
-Authorization: Bearer {CLAWCALL_API_KEY}
-Content-Type: application/json
-
-{ "webhook_push_url": "https://your-server.com/clawcall-events" }
-```
-
-ClawCall will POST a JSON payload to that URL when each call ends:
-```json
-{
-  "event": "call.status",
-  "call_sid": "CA...",
-  "status": "completed",
-  "duration_seconds": 42,
-  "call_type": "user_initiated",
-  "direction": "inbound"
-}
-```
-Send an empty `webhook_push_url` to disable.
-
----
-
-## Tier Limits
-
-| Tier | Minutes/month | Outbound | Scheduled | 3rd Party | Agents | Webhook Push |
-|------|--------------|----------|-----------|-----------|--------|--------------|
-| Free | 10           | No       | No        | No        | 1      | No           |
-| Pro  | 120          | Yes      | Yes       | Yes       | 1      | No           |
-| Team | 500 (pooled) | Yes      | Yes       | Yes       | 5      | Yes          |
-
-Overage: $0.05/minute beyond included minutes (Pro/Team only).
+Voices: `aria` (default), `joanna`, `matthew`, `amy`, `brian`, `emma`, `olivia`.
 
 ---
 
 ## Upgrading to Pro or Team
 
-Payment is accepted in **USDC on Solana mainnet**.
+Payment in **USDC on Solana mainnet**.
 
-**Step 1 — Get the payment details:**
+**Step 1 — Get payment details:**
 ```
 POST https://api.clawcall.online/api/v1/billing/checkout
 Authorization: Bearer {CLAWCALL_API_KEY}
@@ -285,27 +208,42 @@ Content-Type: application/json
 { "tier": "pro" }
 ```
 
-Response includes the Solana wallet address and exact USDC amount to send.
+**Step 2 — Send USDC** to the returned Solana wallet address.
 
-**Step 2 — Send USDC on Solana**
-Send the exact amount of USDC to the provided Solana wallet address.
-
-**Step 3 — Submit the transaction signature:**
+**Step 3 — Confirm:**
 ```
 POST https://api.clawcall.online/api/v1/billing/verify
 Authorization: Bearer {CLAWCALL_API_KEY}
 Content-Type: application/json
 
+{ "tx_signature": "<Solana tx hash>", "tier": "pro" }
+```
+
+---
+
+## Re-registration (If API Key Is Lost)
+
+```
+POST https://api.clawcall.online/api/v1/register
+Content-Type: application/json
+
 {
-  "tx_signature": "<your Solana tx signature>",
-  "tier": "pro"
+  "email":        "{CLAWCALL_EMAIL}",
+  "phone_number": "<user's phone>",
+  "agent_name":   "<agent name>"
 }
 ```
 
-Tier is upgraded instantly upon confirmation.
+Returns a new `api_key`. Save it as `CLAWCALL_API_KEY`.
 
-**Check billing status:**
-```
-GET https://api.clawcall.online/api/v1/billing/status
-Authorization: Bearer {CLAWCALL_API_KEY}
-```
+---
+
+## Tier Limits
+
+| Tier | Minutes/month | Callbacks | Scheduled | 3rd Party | Agents |
+|------|--------------|-----------|-----------|-----------|--------|
+| Free | 10           | No        | No        | No        | 1      |
+| Pro  | 120          | Yes       | Yes       | Yes       | 1      |
+| Team | 500 (pooled) | Yes       | Yes       | Yes       | 5      |
+
+Overage: $0.05/min beyond included minutes (Pro/Team only).

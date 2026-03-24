@@ -26,10 +26,10 @@ def register():
     agent_name = (body.get("agent_name") or "My Agent").strip()
     phone_number = (body.get("phone_number") or "").strip() or None
 
+    # Auto-generate email if not provided (long-poll agents don't need one)
     if not email:
-        return jsonify({"ok": False, "error": "email is required"}), 400
-    if not agent_webhook_url:
-        return jsonify({"ok": False, "error": "agent_webhook_url is required"}), 400
+        import uuid as _uuid
+        email = f"agent-{_uuid.uuid4().hex[:12]}@clawcall.app"
 
     # If user already exists — re-register (new API key, updated webhook URL)
     existing_user = db_exec("SELECT * FROM users WHERE email=%s", (email,), fetchone=True)
@@ -97,6 +97,7 @@ def register():
     return jsonify({
         "ok": True,
         "api_key": key["raw"],
+        "email": email,
         "phone_number": assigned_number,
         "tier": "free",
         "agent_id": agent_id,
