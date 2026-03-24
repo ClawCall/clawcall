@@ -58,10 +58,11 @@ def register():
             if phone_number:
                 db_exec("UPDATE users SET phone_number=%s WHERE id=%s", (phone_number, str(existing_user["id"])))
 
+            assigned_number = existing_agent.get("assigned_number") or _assign_shared_number(str(existing_agent["id"]))
             return jsonify({
                 "ok": True,
                 "api_key": new_key["raw"],
-                "phone_number": existing_agent.get("assigned_number"),
+                "phone_number": assigned_number,
                 "tier": existing_user["tier"],
                 "agent_id": str(existing_agent["id"]),
                 "user_id": str(existing_user["id"]),
