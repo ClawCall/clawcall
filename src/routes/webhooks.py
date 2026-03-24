@@ -118,7 +118,13 @@ def inbound():
         (to_number,),
         fetchone=True,
     )
-    if not phone_row or not phone_row.get("agent_id"):
+    if not phone_row:
+        resp.say("Sorry, this number is not currently active. Goodbye.")
+        resp.hangup()
+        return _twiml(resp)
+
+    # Shared pool numbers don't have a fixed agent_id — they route by from_number
+    if not phone_row.get("is_shared_pool") and not phone_row.get("agent_id"):
         resp.say("Sorry, this number is not currently active. Goodbye.")
         resp.hangup()
         return _twiml(resp)

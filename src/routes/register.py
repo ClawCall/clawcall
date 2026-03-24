@@ -113,15 +113,12 @@ def _new_api_key() -> dict:
 
 
 def _assign_shared_number(agent_id: str) -> str | None:
-    """Assign an unassigned shared-pool number to this agent."""
+    """Return the shared-pool number for this free-tier agent.
+    All free-tier agents share the same number — routing is done by the
+    caller's from_number at call time, so no exclusive assignment needed.
+    """
     row = db_exec(
-        "SELECT id, number FROM phone_numbers WHERE is_shared_pool=TRUE AND agent_id IS NULL LIMIT 1",
+        "SELECT id, number FROM phone_numbers WHERE is_shared_pool=TRUE LIMIT 1",
         fetchone=True,
     )
-    if row:
-        db_exec(
-            "UPDATE phone_numbers SET agent_id=%s, assigned_at=NOW() WHERE id=%s",
-            (agent_id, str(row["id"])),
-        )
-        return row["number"]
-    return None  # No shared numbers available — admin must add them
+    return row["number"] if row else None  # No shared numbers available — admin must add them
