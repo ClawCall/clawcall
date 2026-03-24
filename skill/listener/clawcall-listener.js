@@ -61,29 +61,35 @@ function request(method, path, body) {
 // ── Agent turn ───────────────────────────────────────────────────────────────
 
 function runAgentTurn(message) {
+  let raw = "";
   try {
-    // Pass the caller's speech to OpenClaw's main agent session
-    const raw = execSync(
+    raw = execSync(
       `openclaw agent --message ${JSON.stringify(message)} --json`,
       { timeout: 28_000, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }
     ).trim();
-
-    // openclaw agent --json may output one or more JSON lines; take the last
-    const lines = raw.split("\n").filter(Boolean).reverse();
-    for (const line of lines) {
-      try {
-        const parsed = JSON.parse(line);
-        const reply  = parsed.reply ?? parsed.text ?? parsed.message ?? parsed.content;
-        if (reply) return String(reply).trim();
-      } catch { /* not JSON, keep trying */ }
-    }
-
-    // Fallback: return raw output if no JSON found
-    return raw || "I'm here — could you say that again?";
   } catch (err) {
-    console.error("[ClawCall] Agent error:", err.message);
-    return "I had a little trouble with that — could you repeat it?";
+    // openclaw may exit non-zero when warnings are present; stdout may still
+    // contain the actual reply — recover it from the error object before
+    // falling back to a generic message.
+    raw = (err.stdout || "").trim();
+    if (!raw) {
+      console.error("[ClawCall] Agent error:", err.message);
+      return "I had a little trouble with that — could you repeat it?";
+    }
   }
+
+  // openclaw --json may output one or more JSON lines; take the last one
+  const lines = raw.split("\n").filter(Boolean).reverse();
+  for (const line of lines) {
+    try {
+      const parsed = JSON.parse(line);
+      const reply  = parsed.reply ?? parsed.text ?? parsed.message ?? parsed.content;
+      if (reply) return String(reply).trim();
+    } catch { /* not JSON, keep trying */ }
+  }
+
+  // Fallback: return raw stdout if no JSON found
+  return raw || "I'm here — could you say that again?";
 }
 
 // ── Main loop ────────────────────────────────────────────────────────────────
