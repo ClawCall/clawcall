@@ -100,13 +100,25 @@ def poll_result(call_sid: str, timeout: float = AGENT_RESPONSE_TIMEOUT) -> tuple
     return random.choice(FILLER_PHRASES), False, False
 
 
-def get_result(call_sid: str) -> tuple[str | None, bool, bool]:
-    """Non-blocking result check. Used by /webhooks/twilio/poll."""
+def get_result(call_sid: str, wait: float = 5.0) -> tuple[str | None, bool, bool]:
+    """
+    Check for a result, waiting up to `wait` seconds before giving up.
+    Used by /webhooks/twilio/poll — blocks briefly so the poll loop
+    doesn't spam filler phrases on every Twilio redirect.
+    """
     with _PENDING_LOCK:
         job = _PENDING.get(call_sid)
-    if not job or job["status"] != "done":
+    if not job:
         return None, False, False
-    return job["result"], job.get("end_call", False), True
+    if job["status"] == "done":
+        return job["result"], job.get("end_call", False), True
+    # Wait up to `wait` seconds for the agent to submit a response
+    got = job["event"].wait(timeout=wait)
+    if got:
+        with _PENDING_LOCK:
+            job = _PENDING.get(call_sid, {})
+        return job.get("result") or "", job.get("end_call", False), True
+    return None, False, False
 
 
 def clear(call_sid: str):

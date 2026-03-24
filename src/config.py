@@ -66,4 +66,4 @@ FILLER_PHRASES = [
 ]
 
 # Seconds to wait for agent response before playing filler
-AGENT_RESPONSE_TIMEOUT = 8
+AGENT_RESPONSE_TIMEOUT = 12
