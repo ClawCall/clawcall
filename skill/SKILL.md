@@ -1,6 +1,6 @@
 ---
 name: clawcall
-version: 2.0.1
+version: 2.0.5
 description: >
   Give this agent a real phone number. Receive calls from the user,
   call user back when tasks complete, run scheduled calls, or call
