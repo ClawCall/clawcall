@@ -61,6 +61,31 @@ Content-Type: application/json
    > Call it from {their phone} to talk to me.
    > *(Free tier: calls must come from your registered number.)*"
 
+6. Start the listener so incoming calls are routed to this agent:
+   > "One last step — I need to run the call listener in the background.
+   > Please run this command in a terminal and keep it running:"
+   > ```
+   > node listener/clawcall-listener.js
+   > ```
+   > "While that's running, every call to your ClawCall number will
+   > reach me and I'll respond in real time."
+
+---
+
+## Starting the Listener
+
+The skill ships a listener script at `listener/clawcall-listener.js`.
+It polls ClawCall for incoming call messages and routes them through
+this agent session. **The listener must be running for calls to work.**
+
+To start it (requires Node.js):
+```
+node listener/clawcall-listener.js
+```
+
+The `CLAWCALL_API_KEY` environment variable must be set before running.
+Keep the terminal open — the listener runs until you stop it.
+
 ---
 
 ## Receiving Inbound Calls
