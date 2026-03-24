@@ -1,57 +1,47 @@
 # ClawCall — Backend & Agent Setup Reference
 
-## Agent Environment Variable
+## Environment Variables
 
 | Variable | Description |
 |---|---|
 | `CLAWCALL_API_KEY` | UUID issued on registration. Store securely — never shown again. |
+| `CLAWCALL_EMAIL` | Auto-generated email tied to your account. Store for account recovery. |
 
 ---
 
-## Webhook Endpoints Your Agent Must Expose
+## How Calls Reach Your Agent
 
-| Path | Method | Purpose |
-|---|---|---|
-| `/clawcall/message` | POST | Receive caller speech, return agent response |
-| `/clawcall/third-party-complete` | POST | Notified when a 3rd party autonomous call ends |
+ClawCall uses a **pull model** — your agent polls an endpoint to receive
+incoming call messages. No public URL, no inbound webhook, no Tailscale required.
 
----
+### Step 1 — Poll for incoming messages
 
-## `/clawcall/message` Contract
-
-**Request from ClawCall:**
-```json
-{
-  "call_sid": "CAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-  "message": "User's transcribed speech (or [SCHEDULED] / [THIRD PARTY CALL] / [THIRD PARTY SAYS] prefix)"
-}
+```
+GET https://api.clawcall.online/api/v1/calls/listen?timeout=25
+Authorization: Bearer {CLAWCALL_API_KEY}
 ```
 
-**Your agent must respond within 25 seconds:**
+**When a call is waiting:**
 ```json
-{
-  "response": "Agent's reply text — spoken via TTS",
-  "end_call": false
-}
+{ "ok": true, "call_sid": "CA...", "message": "User's transcribed speech" }
+```
+
+**When no call arrived within timeout:**
+```json
+{ "ok": true, "timeout": true }
+```
+
+### Step 2 — Submit your response
+
+```
+POST https://api.clawcall.online/api/v1/calls/respond/{call_sid}
+Authorization: Bearer {CLAWCALL_API_KEY}
+Content-Type: application/json
+
+{ "response": "Agent's reply text — spoken via TTS", "end_call": false }
 ```
 
 Set `end_call: true` to hang up after speaking.
-
----
-
-## `/clawcall/third-party-complete` Contract
-
-**Request from ClawCall when the autonomous call ends:**
-```json
-{
-  "job_id": "uuid",
-  "status": "completed",
-  "transcript": [
-    { "role": "agent", "text": "Hello, I'm calling to book an appointment..." },
-    { "role": "third_party", "text": "Sure, when would you like to come in?" }
-  ]
-}
-```
 
 ---
 
@@ -63,15 +53,38 @@ Set `end_call: true` to hang up after speaking.
 | `[SCHEDULED] <context>` | Scheduled call — deliver the briefing |
 | `[THIRD PARTY CALL]` | Opening of an autonomous 3rd party call — start the conversation |
 | `[THIRD PARTY SAYS]: <speech>` | Third party's spoken response — continue the conversation |
+| `[THIRD PARTY COMPLETE]` | Third-party call ended — JSON transcript follows in the message body |
 
 ---
 
-## Agent Reachability
+## Registration
 
-OpenClaw exposes your agent via a public URL (Tailscale Funnel or SSH tunnel).
-Provide this URL as `agent_webhook_url` at registration.
+```
+POST https://api.clawcall.online/api/v1/register
+Content-Type: application/json
 
-If your URL changes, re-register with the same email — a new API key is issued and the webhook URL is updated.
+{
+  "phone_number": "<user's E.164 phone, e.g. +14155550100>",
+  "agent_name":   "<optional display name>"
+}
+```
+
+No `agent_webhook_url` is required or accepted — the polling model
+replaces inbound webhooks entirely.
+
+**Response:**
+```json
+{
+  "ok": true,
+  "api_key": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "email": "agent-abc123@clawcall.app",
+  "phone_number": "+18447954032",
+  "tier": "free"
+}
+```
+
+Store `api_key` as `CLAWCALL_API_KEY` and `email` as `CLAWCALL_EMAIL`.
+The email is used only for account recovery (re-registration).
 
 ---
 
@@ -82,6 +95,9 @@ If your URL changes, re-register with the same email — a new API key is issued
 | Free | Shared pool | "ClawCall" |
 | Pro | Dedicated | Your number |
 | Team | Dedicated (×5) | Your number |
+
+Free tier identifies callers by their registered phone number (`from_number`).
+Only calls from the registered number are accepted on free tier.
 
 ---
 
@@ -104,7 +120,7 @@ Set via `POST /api/v1/account/voice`:
 ## Overage Billing
 
 Pro/Team users are never hard-blocked past their included minutes.
-Overage accrues at **$0.05/minute** and is added to the next renewal payment automatically.
+Overage accrues at **$0.05/minute** and is added to the next renewal payment.
 Check current overage via `GET /api/v1/billing/status`.
 
 ---
@@ -112,7 +128,8 @@ Check current overage via `GET /api/v1/billing/status`.
 ## Recording Access
 
 Call recordings are stored as `.mp3` files hosted by Twilio.
-Retrieve URLs via `GET /api/v1/calls/history?transcripts=true` — the `recording_url` field on each call.
+Retrieve URLs via `GET /api/v1/calls/history?transcripts=true` — see the
+`recording_url` field on each call log.
 
 ---
 
@@ -125,6 +142,5 @@ Retrieve URLs via `GET /api/v1/calls/history?transcripts=true` — the `recordin
 | 403 | Feature not available on your tier |
 | 404 | Resource not found |
 | 409 | Conflict (e.g. transaction already used) |
-| 429 | Monthly minute limit reached (Free tier only) |
+| 429 | Monthly minute limit reached |
 | 500 | Internal error |
-| 503 | Service not configured on this server |

@@ -1,6 +1,6 @@
 ---
 name: clawcall
-version: 2.0.0
+version: 2.0.1
 description: >
   Give this agent a real phone number. Receive calls from the user,
   call user back when tasks complete, run scheduled calls, or call
@@ -11,6 +11,7 @@ metadata:
       bins: []
       env:
         - CLAWCALL_API_KEY
+        - CLAWCALL_EMAIL
     primaryEnv: CLAWCALL_API_KEY
 ---
 
