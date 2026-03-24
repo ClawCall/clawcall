@@ -60,11 +60,11 @@ function request(method, path, body) {
 
 // ── Agent turn ───────────────────────────────────────────────────────────────
 
-function runAgentTurn(message) {
+function runAgentTurn(message, callSid) {
   let raw = "";
   try {
     raw = execSync(
-      `openclaw agent --message ${JSON.stringify(message)} --json`,
+      `openclaw agent --session-id ${JSON.stringify(callSid)} --message ${JSON.stringify(message)} --json`,
       { timeout: 28_000, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }
     ).trim();
   } catch (err) {
@@ -112,7 +112,7 @@ async function main() {
       const { call_sid, message } = res;
       console.log(`[ClawCall] ↓ call_sid=${call_sid}  message="${message}"`);
 
-      const reply = runAgentTurn(message);
+      const reply = runAgentTurn(message, call_sid);
       console.log(`[ClawCall] ↑ reply="${reply}"`);
 
       await request("POST", `/api/v1/calls/respond/${call_sid}`, {
