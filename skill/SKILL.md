@@ -4,7 +4,7 @@ version: 2.0.0
 description: >
   Give this agent a real phone number. Receive calls from the user,
   call user back when tasks complete, run scheduled calls, or call
-  third parties on the user's behalf. No public URL or Tailscale required.
+  third parties on the user's behalf. No public URL required.
 metadata:
   openclaw:
     requires:
@@ -16,99 +16,111 @@ metadata:
 
 # ClawCall — Phone Calls for Your Agent
 
-ClawCall gives your agent a real phone number. Users can call you, you can
-call them back, schedule briefings, and place calls to third parties.
+ClawCall gives your agent a real phone number connected to a telephony
+service (Twilio). Users can call you, you can call them back when tasks
+finish, schedule recurring briefings, and place calls to third parties.
 
-**No webhook URL or Tailscale required.** Your agent pulls messages from
-ClawCall using long-polling — all outbound connections from your machine.
+**How it works:** This skill communicates with the ClawCall service at
+`https://api.clawcall.online`. All connections are outbound from your
+machine — no inbound webhook URL is required.
 
 ---
 
-## Setup (Runs Automatically — No Manual Steps Needed)
+## First-Time Setup
 
-**On every startup**, check if `CLAWCALL_API_KEY` is set.
+If `CLAWCALL_API_KEY` is not yet set, guide the user through registration:
 
-If `CLAWCALL_API_KEY` is NOT set:
+1. Explain what you're about to do:
+   > "To give you a phone number, I need to register with ClawCall —
+   > a telephony service that connects your phone to this agent.
+   > ClawCall will store your phone number to route incoming calls to you.
+   > You can delete your account at any time."
 
-1. Ask the user ONE question:
-   > "What's your phone number? I'll use it to set up your ClawCall account
-   > so you can call me directly. (e.g. +14155550100)"
+2. Ask for their phone number:
+   > "What phone number should I register? This is the number you'll
+   > call me from. (E.164 format, e.g. +14155550100)"
 
-2. Register immediately — no email or webhook URL needed:
+3. Call the registration endpoint:
 
 ```
 POST https://api.clawcall.online/api/v1/register
 Content-Type: application/json
 
 {
-  "phone_number": "<user's E.164 phone>",
+  "phone_number": "<user's phone in E.164 format>",
   "agent_name":   "<your agent name>"
 }
 ```
 
-3. Save the returned `api_key` as `CLAWCALL_API_KEY`.
-   Also save the returned `email` as `CLAWCALL_EMAIL` (for re-registration later).
+4. Store the returned `api_key` as `CLAWCALL_API_KEY` and the returned
+   `email` as `CLAWCALL_EMAIL`. Both are needed for account recovery.
 
-4. Tell the user:
-   > "You're all set! 📞 Your ClawCall number is **{phone_number}**.
-   > Call it from **{their phone}** anytime to talk to me directly.
-   > *(Free tier: you must call from your registered number so I know it's you.)*"
-
-5. Immediately start the listen loop (see below).
+5. Confirm setup with the user:
+   > "Done! Your ClawCall number is **{phone_number}**.
+   > Call it from {their phone} to talk to me.
+   > *(Free tier: calls must come from your registered number.)*"
 
 ---
 
-## The Listen Loop (Always Running)
+## Receiving Inbound Calls
 
-After setup, run this loop continuously so you never miss a call:
+When the user calls the ClawCall number, ClawCall queues their speech
+and waits for your response. To receive queued call messages, poll:
 
 ```
-loop forever:
-    GET https://api.clawcall.online/api/v1/calls/listen?timeout=25
-    Authorization: Bearer {CLAWCALL_API_KEY}
-
-    if response.timeout == true:
-        continue  # no call, loop again immediately
-
-    call_sid = response.call_sid
-    message  = response.message
-
-    reply = process(message)   # your normal agent logic
-
-    POST https://api.clawcall.online/api/v1/calls/respond/{call_sid}
-    Authorization: Bearer {CLAWCALL_API_KEY}
-    Content-Type: application/json
-
-    { "response": reply, "end_call": false }
-
-    # keep looping — next call will come through the same endpoint
+GET https://api.clawcall.online/api/v1/calls/listen?timeout=25
+Authorization: Bearer {CLAWCALL_API_KEY}
 ```
 
-Set `"end_call": true` in your response to hang up after speaking.
+**Response when a call is waiting:**
+```json
+{
+  "ok": true,
+  "call_sid": "CA...",
+  "message": "What's the weather today?"
+}
+```
 
-**Important:** Respond within 25 seconds. For tasks taking longer, respond
-quickly with `"On it, give me a second."` — ClawCall will keep the line
-active while you work.
+**Response when no call is waiting (timeout):**
+```json
+{ "ok": true, "timeout": true }
+```
 
----
+After receiving a message, respond within 25 seconds:
 
-## Message Types
+```
+POST https://api.clawcall.online/api/v1/calls/respond/{call_sid}
+Authorization: Bearer {CLAWCALL_API_KEY}
+Content-Type: application/json
 
-Messages arriving via `/calls/listen` follow these patterns:
+{
+  "response": "It's 72°F and sunny in New York.",
+  "end_call": false
+}
+```
 
-| Message prefix | Meaning |
+Set `"end_call": true` to hang up after speaking your response.
+Set `"end_call": false` to keep the line open for follow-up.
+
+For tasks that take longer than 25 seconds, respond immediately with
+an interim message like `"On it, give me a second."` — ClawCall will
+keep the line active while you work, then poll again for your next reply.
+
+### Message prefixes
+
+| Prefix | Meaning |
 |---|---|
-| *(plain text)* | User is speaking on an inbound call |
+| *(plain text)* | Normal inbound call from user |
 | `[SCHEDULED] <context>` | A scheduled call fired — deliver the briefing |
-| `[THIRD PARTY CALL]` | Start of an autonomous third-party call |
-| `[THIRD PARTY SAYS]: <speech>` | Third party spoke — continue the conversation |
+| `[THIRD PARTY CALL]` | Opening turn of an autonomous third-party call |
+| `[THIRD PARTY SAYS]: <text>` | Third party's response — continue the conversation |
 | `[THIRD PARTY COMPLETE]` | Third-party call ended — JSON transcript follows |
 
 ---
 
 ## Calling the User Back (Pro tier)
 
-When you finish a background task the user asked you to report on:
+When a background task finishes and you need to notify the user by phone:
 
 ```
 POST https://api.clawcall.online/api/v1/calls/outbound/callback
@@ -116,13 +128,15 @@ Authorization: Bearer {CLAWCALL_API_KEY}
 Content-Type: application/json
 
 {
-  "message": "Your deployment finished. 3 services updated, 0 errors.",
+  "message":       "Your deployment finished. 3 services updated, 0 errors.",
   "allow_followup": true
 }
 ```
 
 If `allow_followup` is true, the user can ask follow-up questions after
-hearing the message. The follow-up arrives via your listen loop as normal.
+the message. Those replies arrive via `/calls/listen` as normal.
+
+**Requires Pro tier.**
 
 ---
 
@@ -134,19 +148,18 @@ Authorization: Bearer {CLAWCALL_API_KEY}
 Content-Type: application/json
 
 {
-  "cron": "0 8 * * 1-5",
-  "label": "Morning briefing",
-  "task_context": "Give me a summary of my calendar, top emails, and tasks",
-  "timezone": "America/New_York"
+  "cron":         "0 8 * * 1-5",
+  "label":        "Morning briefing",
+  "task_context": "Summarise my calendar, top emails, and pending tasks",
+  "timezone":     "America/New_York"
 }
 ```
 
-Common cron patterns:
-- Every weekday 8am: `"0 8 * * 1-5"`
-- Every day 9am:     `"0 9 * * *"`
-- Every Monday 7am:  `"0 7 * * 1"`
+Common patterns: every weekday 8am `"0 8 * * 1-5"` · daily 9am `"0 9 * * *"`.
 
-To cancel: `DELETE /api/v1/calls/schedule/{id}`
+To cancel: `DELETE https://api.clawcall.online/api/v1/calls/schedule/{id}`
+
+**Requires Pro tier.**
 
 ---
 
@@ -158,26 +171,27 @@ Authorization: Bearer {CLAWCALL_API_KEY}
 Content-Type: application/json
 
 {
-  "to_number": "+14155550100",
-  "objective": "Book a dentist appointment for next Tuesday afternoon",
-  "context":   "Patient: Alex Kumar. Returning patient. Flexible on time."
+  "to_number":  "+14155550100",
+  "objective":  "Book a dentist appointment for next Tuesday afternoon",
+  "context":    "Patient: Alex Kumar. Returning patient. Flexible on time."
 }
 ```
 
-The conversation arrives turn-by-turn via your listen loop:
-- Opening turn: `[THIRD PARTY CALL]\nObjective: ...\nContext: ...`
-- Each reply: `[THIRD PARTY SAYS]: <speech>`
-- When done, set `end_call: true` in your response.
-- Completion notification: `[THIRD PARTY COMPLETE]\n{json}`
+ClawCall dials the number and forwards the conversation turn-by-turn via
+`/calls/listen`. Set `"end_call": true` when the objective is complete.
+
+**Requires Pro tier.**
 
 ---
 
-## Checking Usage
+## Account & Usage
 
 ```
 GET https://api.clawcall.online/api/v1/account
 Authorization: Bearer {CLAWCALL_API_KEY}
 ```
+
+Returns tier, minutes used, minutes remaining, and assigned phone number.
 
 ---
 
@@ -191,15 +205,15 @@ Content-Type: application/json
 { "voice": "aria" }
 ```
 
-Voices: `aria` (default), `joanna`, `matthew`, `amy`, `brian`, `emma`, `olivia`.
+Available voices: `aria` (default) · `joanna` · `matthew` · `amy` · `brian` · `emma` · `olivia`
 
 ---
 
 ## Upgrading to Pro or Team
 
-Payment in **USDC on Solana mainnet**.
+Payment is accepted in **USDC on Solana mainnet**.
 
-**Step 1 — Get payment details:**
+**Step 1 — Get payment address and amount:**
 ```
 POST https://api.clawcall.online/api/v1/billing/checkout
 Authorization: Bearer {CLAWCALL_API_KEY}
@@ -208,9 +222,9 @@ Content-Type: application/json
 { "tier": "pro" }
 ```
 
-**Step 2 — Send USDC** to the returned Solana wallet address.
+**Step 2 — Send USDC** to the wallet address returned above.
 
-**Step 3 — Confirm:**
+**Step 3 — Submit transaction signature to confirm:**
 ```
 POST https://api.clawcall.online/api/v1/billing/verify
 Authorization: Bearer {CLAWCALL_API_KEY}
@@ -219,9 +233,13 @@ Content-Type: application/json
 { "tx_signature": "<Solana tx hash>", "tier": "pro" }
 ```
 
+Tier upgrades instantly on confirmation.
+
 ---
 
-## Re-registration (If API Key Is Lost)
+## Recovering a Lost API Key
+
+Re-register with the same email to rotate the key:
 
 ```
 POST https://api.clawcall.online/api/v1/register
@@ -234,7 +252,7 @@ Content-Type: application/json
 }
 ```
 
-Returns a new `api_key`. Save it as `CLAWCALL_API_KEY`.
+Returns a fresh `api_key`. Save it as `CLAWCALL_API_KEY`.
 
 ---
 
