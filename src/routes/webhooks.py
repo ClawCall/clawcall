@@ -261,7 +261,7 @@ def poll():
     log_id = request.args.get("call_log_id", "")
 
     voice = _agent_voice(agent_id)
-    result, end_call, got_result = bridge.get_result(call_sid)
+    result, end_call, got_result = bridge.get_result(call_sid, wait=10.0)
     resp = VoiceResponse()
 
     if not got_result:

@@ -1,6 +1,6 @@
 ---
 name: clawcall
-version: 2.0.5
+version: 2.1.0
 description: >
   Give this agent a real phone number. Receive calls from the user,
   call user back when tasks complete, run scheduled calls, or call
@@ -8,7 +8,7 @@ description: >
 metadata:
   openclaw:
     requires:
-      bins: []
+      bins: ["node", "openclaw"]
       env:
         - CLAWCALL_API_KEY
         - CLAWCALL_EMAIL
@@ -61,14 +61,42 @@ Content-Type: application/json
    > Call it from {their phone} to talk to me.
    > *(Free tier: calls must come from your registered number.)*"
 
-6. Start the listener so incoming calls are routed to this agent:
-   > "One last step — I need to run the call listener in the background.
-   > Please run this command in a terminal and keep it running:"
+6. Start the listener:
+
+   The listener is a small Node.js script that polls ClawCall for
+   incoming call messages and routes them to this agent session.
+   It only communicates with `api.clawcall.online` and invokes the
+   local OpenClaw CLI — it does not access unrelated files or services.
+
+   Ask the user:
+   > "I need to keep a listener running so calls reach me. I can start
+   > it for you right now, or give you the command to run yourself —
+   > which do you prefer?"
+
+   **If the user says "start it for me":** use your shell tool to launch
+   it as a background process (requires the shell tool to be enabled):
+
+   Mac / Linux —
+   ```
+   nohup node /path/to/skill/listener/clawcall-listener.js \
+     > /tmp/clawcall-listener.log 2>&1 &
+   ```
+   Windows —
+   ```
+   start "" /B node C:\path\to\skill\listener\clawcall-listener.js
+   ```
+
+   Confirm it started (check PID / log file), then tell the user:
+   > "Listener is running. Calls to {phone_number} will reach me in
+   > real time. You can stop it any time by killing the node process."
+
+   **If the user prefers to run it themselves** (or the shell tool is
+   not available), give them this command:
    > ```
    > node listener/clawcall-listener.js
    > ```
-   > "While that's running, every call to your ClawCall number will
-   > reach me and I'll respond in real time."
+   > "Run that in a terminal and keep it open. Every call will reach
+   > me while it's running."
 
 ---
 
@@ -78,20 +106,31 @@ The skill ships a listener script at `listener/clawcall-listener.js`.
 It polls ClawCall for incoming call messages and routes them through
 this agent session. **The listener must be running for calls to work.**
 
-To start it (requires Node.js):
+During first-time setup, offer to start it automatically (see above).
+To start it manually (requires Node.js):
 ```
 node listener/clawcall-listener.js
 ```
 
 The `CLAWCALL_API_KEY` environment variable must be set before running.
-Keep the terminal open — the listener runs until you stop it.
+The listener runs until the terminal is closed or the process is killed.
 
 ---
 
 ## Receiving Inbound Calls
 
-When the user calls the ClawCall number, ClawCall queues their speech
-and waits for your response. To receive queued call messages, poll:
+**When using the listener script** (the normal setup), the listener polls
+ClawCall for you and passes each caller's speech directly to this agent
+via `--message`. **Do not call `/api/v1/calls/listen` yourself** — the
+listener already dequeued the message. Just answer the user's question
+naturally and exit. The listener captures your output and relays it back.
+
+---
+
+### Advanced: receiving calls without the listener script
+
+If you are integrating ClawCall without `clawcall-listener.js`, poll
+for incoming messages manually:
 
 ```
 GET https://api.clawcall.online/api/v1/calls/listen?timeout=25
@@ -112,7 +151,7 @@ Authorization: Bearer {CLAWCALL_API_KEY}
 { "ok": true, "timeout": true }
 ```
 
-After receiving a message, respond within 25 seconds:
+After receiving a message, submit your response:
 
 ```
 POST https://api.clawcall.online/api/v1/calls/respond/{call_sid}
@@ -128,9 +167,10 @@ Content-Type: application/json
 Set `"end_call": true` to hang up after speaking your response.
 Set `"end_call": false` to keep the line open for follow-up.
 
-For tasks that take longer than 25 seconds, respond immediately with
-an interim message like `"On it, give me a second."` — ClawCall will
-keep the line active while you work, then poll again for your next reply.
+> **Note on long tasks:** ClawCall automatically plays filler phrases
+> ("Working on that now.", "Just a sec.", etc.) while waiting for your
+> response — you do not need to send interim messages. Simply respond
+> when ready; the line stays active.
 
 ### Message prefixes
 
